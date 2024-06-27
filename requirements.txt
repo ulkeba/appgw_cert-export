@@ -1,0 +1,4 @@
+requests
+cryptography 
+azure-mgmt-resource
+azure-identity
