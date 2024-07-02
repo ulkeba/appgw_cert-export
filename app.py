@@ -1,3 +1,4 @@
+import datetime
 import os
 import json
 import base64
@@ -57,6 +58,7 @@ def get_certificate_details(certData):
         'issuerEqualsSubject': x509.issuer == x509.subject,
         'validFrom': x509.not_valid_before_utc.strftime('%Y-%m-%d %H:%M:%S'),
         'validTo': x509.not_valid_after_utc.strftime('%Y-%m-%d %H:%M:%S'),
+        'expired': x509.not_valid_after_utc.timestamp() < datetime.datetime.now().timestamp(),
         'subjectAlternativeName': str(san.value) if san else None,
         'basicConstraints': str(basic._value) if basic else None
     }
@@ -108,6 +110,7 @@ def get_certificate_details_by_id(list, certId) -> dict:
     for c in list:
         if c['id'] == certId:
             ret_val = c['properties']['certificateDetails']
+            ret_val = {**ret_val, 'name': c['name']}
             return ret_val
     # trustedRootCert = filter (lambda i: i['id'] == certId, list)
     # if trustedRootCert[0]:
@@ -115,6 +118,17 @@ def get_certificate_details_by_id(list, certId) -> dict:
     return None
 
 
+def get_request_routing_rules_by_id(appGwExtendedJson, id):
+    ret_val = [x for x in appGwExtendedJson['properties']['requestRoutingRules'] if x['id'] == id]
+    if len(ret_val) != 1:
+        raise "Expected to find exactly one backendAddressPools here."
+    return ret_val[0]
+
+def get_backend_address_pool_by_id(appGwExtendedJson, id):
+    ret_val = [x for x in appGwExtendedJson['properties']['backendAddressPools'] if x['id'] == id]
+    if len(ret_val) != 1:
+        raise "Expected to find exactly one backendAddressPools here."
+    return ret_val[0]
 
 def  unwrap_backend_settings(appGwExtendedJson):
     backendSettings = []
@@ -124,6 +138,16 @@ def  unwrap_backend_settings(appGwExtendedJson):
         appGwSubId = appGwIdParts[2]
         appGwRgName = appGwIdParts[4]
         appGwName = appGwIdParts[8]
+        requestRoutingRules = i['properties']['requestRoutingRules']
+        addressPools = []
+        for requestRoutingRuleId in requestRoutingRules:
+            requestRoutingRule = get_request_routing_rules_by_id(appGwExtendedJson, requestRoutingRuleId['id'])
+            backendAddressPool = get_backend_address_pool_by_id(appGwExtendedJson, requestRoutingRule['properties']['backendAddressPool']['id'])
+            addressPools.append({
+                'addressPoolName' : backendAddressPool['name'],
+                'addressPoolAddresses': backendAddressPool['properties']['backendAddresses']
+            })
+
         settingsBase = {
                 'appGwId': appGwId,
                 'subscriptionId': appGwSubId,
@@ -131,6 +155,7 @@ def  unwrap_backend_settings(appGwExtendedJson):
                 'appGwName': appGwName,
                 'appGwSku': appGwExtendedJson['properties']['sku']['name'],
                 'backendHttpSettingsName': i['name'],
+                'addressPools': addressPools,
                 'backendHttpSettingsHostName': None if not ('hostName' in i['properties']) else i['properties']['hostName'],
                 'pickHostNameFromBackendAddress': None if not ('pickHostNameFromBackendAddress' in i['properties']) else i['properties']['pickHostNameFromBackendAddress'],
             }
@@ -141,11 +166,13 @@ def  unwrap_backend_settings(appGwExtendedJson):
             cD = get_certificate_details_by_id(allAuthenticationCertificates, cert['id'])
             s = {
                 **settingsBase, 
+                'authenticationCertificateInternalName': cD['name'],
                 'authenticationCertificateIssuer': cD['issuer'],
                 'authenticationCertificateSubject': cD['subject'],
                 'authenticationCertificateIssuerEqualsSubject': cD['issuerEqualsSubject'],
                 'authenticationCertificateValidFrom': cD['validFrom'],
                 'authenticationCertificateValidTo': cD['validTo'],
+                'authenticationCertificateExpired': cD['expired'],
                 'authenticationCertificateSubjectAlternativeName': cD['subjectAlternativeName'],
                 'authenticationCertificateBasicConstraints': cD['basicConstraints']
             }
@@ -157,11 +184,13 @@ def  unwrap_backend_settings(appGwExtendedJson):
             cD = get_certificate_details_by_id(allTrustedRootCertificates, cert['id'])
             s = {
                 **settingsBase, 
+                'trustedRootCertificateIssuer': cD['name'],
                 'trustedRootCertificateIssuer': cD['issuer'],
                 'trustedRootCertificateSubject': cD['subject'],
                 'trustedRootCertificateIssuerEqualsSubject': cD['issuerEqualsSubject'],
                 'trustedRootCertificateValidFrom': cD['validFrom'],
                 'trustedRootCertificateValidTo': cD['validTo'],
+                'trustedRootCertificateExpired': cD['expired'],
                 'trustedRootCertificateSubjectAlternativeName': cD['subjectAlternativeName'],
                 'trustedRootCertificateBasicConstraints': cD['basicConstraints']
             }
