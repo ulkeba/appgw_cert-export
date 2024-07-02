@@ -65,7 +65,7 @@ def get_certificate_details(certData):
 
 
 
-def get_appgw_json(appGwId):
+def get_appgw_json_from_arm(appGwId):
     headers = {'Authorization': 'Bearer ' + get_token()}
     response = requests.get('https://management.azure.com' + appGwId + '?api-version=2023-09-01', headers=headers)
 
@@ -76,8 +76,16 @@ def get_appgw_json(appGwId):
     
     return response.text
 
-def process_appgw(appGwId):
-    appGwJsonString = get_appgw_json(appGwId)
+def process_appgw(appGwSource):
+    if (appGwSource.startswith('file://')):
+        appGwFilePath = appGwSource[7:]
+        appGwJsonString = open(appGwFilePath).read()
+        appGwJson = json.loads(appGwJsonString)
+        appGwId = appGwJson['id']
+    else:
+        appGwId = appGwSource
+        appGwJsonString = get_appgw_json_from_arm(appGwId)
+        appGwJson = json.loads(appGwJsonString)
 
     # split appGwId by '/' delimiter.
     appGwIdParts = appGwId.split('/')
@@ -91,8 +99,6 @@ def process_appgw(appGwId):
 
 
     open(appGwJsonFileName, "w").write(appGwJsonString)
-
-    appGwJson = json.loads(appGwJsonString)
     appGwJson = extend_with_certificate_details(appGwJson)
 
     open(appGwExtendedJsonFileName, "w").write(json.dumps(appGwJson, indent=2))
@@ -118,7 +124,7 @@ def  unwrap_backend_settings(appGwExtendedJson):
         appGwSubId = appGwIdParts[2]
         appGwRgName = appGwIdParts[4]
         appGwName = appGwIdParts[8]
-        s = {
+        settingsBase = {
                 'appGwId': appGwId,
                 'subscriptionId': appGwSubId,
                 'resourceGroupName': appGwRgName,
@@ -131,12 +137,10 @@ def  unwrap_backend_settings(appGwExtendedJson):
         
         allAuthenticationCertificates = appGwExtendedJson['properties']['authenticationCertificates'] if 'authenticationCertificates' in appGwExtendedJson['properties'] else []
         settingsAuthenticationCertificates = i['properties']['authenticationCertificates'] if 'authenticationCertificates' in i['properties'] else []
-        if (len(settingsAuthenticationCertificates) > 1):
-            raise Exception('Multiple authenticationCertificates is not supported.')
         for cert in settingsAuthenticationCertificates:
             cD = get_certificate_details_by_id(allAuthenticationCertificates, cert['id'])
             s = {
-                **s, 
+                **settingsBase, 
                 'authenticationCertificateIssuer': cD['issuer'],
                 'authenticationCertificateSubject': cD['subject'],
                 'authenticationCertificateIssuerEqualsSubject': cD['issuerEqualsSubject'],
@@ -145,15 +149,14 @@ def  unwrap_backend_settings(appGwExtendedJson):
                 'authenticationCertificateSubjectAlternativeName': cD['subjectAlternativeName'],
                 'authenticationCertificateBasicConstraints': cD['basicConstraints']
             }
+            backendSettings.append(s)
 
         allTrustedRootCertificates = appGwExtendedJson['properties']['trustedRootCertificates'] if 'trustedRootCertificates' in appGwExtendedJson['properties'] else []
         settingsTrustedCertificates = i['properties']['trustedRootCertificates'] if 'trustedRootCertificates' in i['properties'] else []
-        if (len(settingsTrustedCertificates) > 1):
-            raise Exception('Multiple trustedRootCertificates is not supported.')
         for cert in settingsTrustedCertificates:
             cD = get_certificate_details_by_id(allTrustedRootCertificates, cert['id'])
             s = {
-                **s, 
+                **settingsBase, 
                 'trustedRootCertificateIssuer': cD['issuer'],
                 'trustedRootCertificateSubject': cD['subject'],
                 'trustedRootCertificateIssuerEqualsSubject': cD['issuerEqualsSubject'],
@@ -162,7 +165,7 @@ def  unwrap_backend_settings(appGwExtendedJson):
                 'trustedRootCertificateSubjectAlternativeName': cD['subjectAlternativeName'],
                 'trustedRootCertificateBasicConstraints': cD['basicConstraints']
             }
-        backendSettings.append(s)
+            backendSettings.append(s)
 
     return backendSettings
 
