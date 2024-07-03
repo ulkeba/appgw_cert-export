@@ -72,6 +72,7 @@ def get_certificate_details(certData):
         pass
 
     return {
+        'format': format,
         'issuer': x509.issuer.rfc4514_string(),
         'subject': x509.subject.rfc4514_string(),
         'issuerEqualsSubject': x509.issuer == x509.subject,
