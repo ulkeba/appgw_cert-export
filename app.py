@@ -39,7 +39,26 @@ def extend_with_certificate_details(appGwJson):
 
 def get_certificate_details(certData):
     decoded_data = base64.b64decode(certData)
-    x509 = cryptography.x509.load_pem_x509_certificate(decoded_data)
+    try:
+        decoded = decoded_data.decode('utf-8')
+        format = 'utf-8/'
+    except UnicodeDecodeError:
+        try: 
+            decoded = decoded_data.decode('utf-16')
+            format = 'utf-16/'
+        except UnicodeDecodeError:
+            decoded = None
+            format = 'bin/'
+
+    if decoded:
+        # We managed to decode to string; attempting to read PEM format.
+        x509 = cryptography.x509.load_pem_x509_certificate(bytes(decoded, 'utf-8'))
+        format += 'pem'
+    else: 
+        # We failed to decode to string; attempting to read DER format.
+        x509 = cryptography.x509.load_der_x509_certificate(decoded_data)
+        format += 'der'
+
     san = ""
     try: 
         san = x509.extensions.get_extension_for_class(cryptography.x509.SubjectAlternativeName)
@@ -167,6 +186,7 @@ def  unwrap_backend_settings(appGwExtendedJson):
             s = {
                 **settingsBase, 
                 'authenticationCertificateInternalName': cD['name'],
+                'authenticationCertificateFormat': cD['format'],
                 'authenticationCertificateIssuer': cD['issuer'],
                 'authenticationCertificateSubject': cD['subject'],
                 'authenticationCertificateIssuerEqualsSubject': cD['issuerEqualsSubject'],
@@ -185,6 +205,7 @@ def  unwrap_backend_settings(appGwExtendedJson):
             s = {
                 **settingsBase, 
                 'trustedRootCertificateIssuer': cD['name'],
+                'trustedRootCertificateFormat': cD['format'],
                 'trustedRootCertificateIssuer': cD['issuer'],
                 'trustedRootCertificateSubject': cD['subject'],
                 'trustedRootCertificateIssuerEqualsSubject': cD['issuerEqualsSubject'],
