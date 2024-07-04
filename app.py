@@ -10,6 +10,10 @@ from cryptography import x509
 
 from azure.identity import DefaultAzureCredential
 
+WINDOWS_LINE_ENDING = '\r\n'
+UNIX_LINE_ENDING = '\n'
+
+
 WORK_DIR = os.getcwd()
 OUT_BASE_DIR = WORK_DIR + "/out"
 
@@ -52,6 +56,9 @@ def get_certificate_details(certData):
 
     if decoded:
         # We managed to decode to string; attempting to read PEM format.
+        # Remove double windows line endings (...however they came here.)
+        while decoded.find(WINDOWS_LINE_ENDING + WINDOWS_LINE_ENDING) != -1:
+            decoded = decoded.replace(WINDOWS_LINE_ENDING + WINDOWS_LINE_ENDING, WINDOWS_LINE_ENDING)
         x509 = cryptography.x509.load_pem_x509_certificate(bytes(decoded, 'utf-8'))
         format += 'pem'
     else: 
