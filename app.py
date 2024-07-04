@@ -158,15 +158,19 @@ def  unwrap_backend_settings(appGwExtendedJson):
         appGwSubId = appGwIdParts[2]
         appGwRgName = appGwIdParts[4]
         appGwName = appGwIdParts[8]
-        requestRoutingRules = i['properties']['requestRoutingRules']
-        addressPools = []
-        for requestRoutingRuleId in requestRoutingRules:
-            requestRoutingRule = get_request_routing_rules_by_id(appGwExtendedJson, requestRoutingRuleId['id'])
-            backendAddressPool = get_backend_address_pool_by_id(appGwExtendedJson, requestRoutingRule['properties']['backendAddressPool']['id'])
-            addressPools.append({
-                'addressPoolName' : backendAddressPool['name'],
-                'addressPoolAddresses': backendAddressPool['properties']['backendAddresses']
-            })
+        if 'requestRoutingRules' in i['properties']:
+            requestRoutingRules = i['properties']['requestRoutingRules']
+            addressPools = []
+            for requestRoutingRuleId in requestRoutingRules:
+                requestRoutingRule = get_request_routing_rules_by_id(appGwExtendedJson, requestRoutingRuleId['id'])
+                backendAddressPool = get_backend_address_pool_by_id(appGwExtendedJson, requestRoutingRule['properties']['backendAddressPool']['id'])
+                addressPools.append({
+                    'addressPoolName' : backendAddressPool['name'],
+                    'addressPoolAddresses': backendAddressPool['properties']['backendAddresses']
+                })
+            addressPoolsString = json.dumps(addressPools)
+        else:
+            addressPoolsString = "none"
 
         settingsBase = {
                 'appGwId': appGwId,
@@ -175,7 +179,7 @@ def  unwrap_backend_settings(appGwExtendedJson):
                 'appGwName': appGwName,
                 'appGwSku': appGwExtendedJson['properties']['sku']['name'],
                 'backendHttpSettingsName': i['name'],
-                'addressPools': addressPools,
+                'addressPools': addressPoolsString,
                 'backendHttpSettingsHostName': None if not ('hostName' in i['properties']) else i['properties']['hostName'],
                 'pickHostNameFromBackendAddress': None if not ('pickHostNameFromBackendAddress' in i['properties']) else i['properties']['pickHostNameFromBackendAddress'],
             }
